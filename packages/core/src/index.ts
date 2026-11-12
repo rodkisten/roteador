@@ -307,3 +307,5 @@ export function route<Env, S extends Schemas>(definition: RouteDefinition<Env, S
 export { cors, bearerAuth, type CorsOptions } from "./middleware";
 
 export { basicAuth, bodyLimit, secureHeaders, logger, prettyJSON, getCookie, setCookie, type CookieOptions, type BasicAuthOptions } from "./utilities";
+
+export { serveStatic, compress, html, rawHtml, htmlResponse, escapeHtml, type HtmlFragment, type StaticOptions, type CompressionOptions } from "./web";
