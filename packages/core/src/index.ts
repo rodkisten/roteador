@@ -108,7 +108,7 @@ export function createApp<Env = unknown>() {
       globalMiddleware.push(middleware);
       return app;
     },
-    route<S extends Schemas>(definition: RouteDefinition<Env, S>) {
+    route<const S extends Schemas>(definition: S & { method: string; path: string; handler: Handler<Env, NoInfer<S>> }) {
       const { matcher, keys } = compile(definition.path);
       if (routes.some((r) => r.method === definition.method.toUpperCase() && r.path === definition.path)) {
         throw new TypeError("Duplicate route: " + definition.method + " " + definition.path);
