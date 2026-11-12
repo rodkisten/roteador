@@ -134,7 +134,7 @@ async function parseBody(req: Request) {
 
 /** A scoped route registrar. Middleware affects only routes registered after it. */
 export type RouteGroup<Env> = {
-  use(middleware: Middleware<Env>): RouteGroup<Env>;
+  use(...middleware: Middleware<Env>[]): RouteGroup<Env>;
   route<const S extends Schemas>(definition: S & {
     method: string; path: string; handler: Handler<Env, NoInfer<S>>;
   }): RouteGroup<Env>;
@@ -187,7 +187,7 @@ export function createApp<Env = unknown>() {
     if (!prefix.startsWith("/")) throw new TypeError("Group prefix must start with /");
     const middleware = [...inherited];
     const api: RouteGroup<Env> = {
-      use(fn) { middleware.push(fn); return api; },
+      use(...handlers) { middleware.push(...handlers); return api; },
       route(definition) { register(definition, prefix, middleware); return api; },
       get(path, handler) { register({ method: "GET", path, handler }, prefix, middleware); return api; },
       post(path, handler) { register({ method: "POST", path, handler }, prefix, middleware); return api; },
@@ -201,8 +201,8 @@ export function createApp<Env = unknown>() {
 
   const app = {
     onError(handler: ErrorHandler<Env>) { errorHandler = handler; return app; },
-    use(middleware: Middleware<Env>) {
-      globalMiddleware.push(middleware);
+    use(...middleware: Middleware<Env>[]) {
+      globalMiddleware.push(...middleware);
       return app;
     },
     route<const S extends Schemas>(definition: S & {
@@ -305,3 +305,5 @@ export function route<Env, S extends Schemas>(definition: RouteDefinition<Env, S
 }
 
 export { cors, bearerAuth, type CorsOptions } from "./middleware";
+
+export { basicAuth, bodyLimit, secureHeaders, logger, prettyJSON, getCookie, setCookie, type CookieOptions, type BasicAuthOptions } from "./utilities";
