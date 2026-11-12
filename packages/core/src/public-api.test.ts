@@ -191,7 +191,7 @@ describe("response contracts and error hooks", () => {
     app.route({
       method: "GET", path: "/bad",
       responses: { 200: check(() => false) },
-      handler: () => ({ secret: "do-not-leak" }),
+      handler: () => Response.json({ secret: "do-not-leak" }),
     });
     const response = await app.fetch(req("/bad"), undefined);
     expect(response.status).toBe(500);
