@@ -18,9 +18,11 @@
   "scripts": {
     "build": "tsdown src/index.ts --format esm --dts",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0"
+    "@types/node": "^22.0.0",
+    "@vitest/coverage-v8": "^5.1.0"
   }
 }
