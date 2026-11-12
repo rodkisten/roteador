@@ -17,7 +17,18 @@ export type StandardSchema<Input = unknown, Output = Input> = {
   };
 };
 type Infer<S> = S extends StandardSchema<any, infer O> ? O : unknown;
-type Schemas = { params?: StandardSchema<any, any>; query?: StandardSchema<any, any>; body?: StandardSchema<any, any> };
+export type ResponseSchemas = Partial<Record<number, StandardSchema<any, any>>>;
+type Schemas = { params?: StandardSchema<any, any>; query?: StandardSchema<any, any>; body?: StandardSchema<any, any>; responses?: ResponseSchemas };
+export type TypedResponse<Status extends number, Body> = { status: Status; body: Body; headers?: HeadersInit };
+/** Create a status-specific response with a body inferred from its schema contract. */
+export function respond<const Status extends number, Body>(status: Status, body: Body, headers?: HeadersInit): TypedResponse<Status, Body> {
+  return { status, body, headers };
+}
+type OutputFor<R extends ResponseSchemas> = {
+  [K in keyof R & number]: R[K] extends StandardSchema<any, infer O> ? TypedResponse<K, O> : never;
+}[keyof R & number];
+type RouteResult<S extends Schemas> = S extends { responses: infer R extends ResponseSchemas }
+  ? OutputFor<R> | Response : unknown;
 export type Context<Env, S extends Schemas = {}> = {
   req: Request;
   env: Env;
@@ -28,7 +39,8 @@ export type Context<Env, S extends Schemas = {}> = {
   waitUntil(promise: Promise<unknown>): void;
 };
 export type Handler<Env, S extends Schemas = {}> =
-  (context: Context<Env, S>) => MaybePromise<unknown>;
+  (context: Context<Env, S>) => MaybePromise<RouteResult<S>>;
+export type ErrorHandler<Env> = (error: unknown, context: { req: Request; env: Env }) => MaybePromise<Response | undefined>;
 export type Middleware<Env> = (
   context: Context<Env>,
   next: () => Promise<Response>,
@@ -72,9 +84,30 @@ function compile(path: string) {
 
 function serialize(value: unknown): Response {
   if (value instanceof Response) return value;
+  if (isTypedResponse(value)) return Response.json(value.body, { status: value.status, headers: value.headers });
   if (value === undefined || value === null) return new Response(null, { status: 204 });
   if (typeof value === "string") return new Response(value);
   return Response.json(value);
+}
+
+function isTypedResponse(value: unknown): value is TypedResponse<number, unknown> {
+  return typeof value === "object" && value !== null && "status" in value &&
+    typeof value.status === "number" && "body" in value;
+}
+
+async function validateResponse(value: unknown, schemas: ResponseSchemas | undefined): Promise<Response> {
+  if (!schemas) return serialize(value);
+  const response = serialize(value);
+  const schema = schemas[response.status];
+  if (!schema) throw new HttpError(500, "Undeclared response status", "RESPONSE_CONTRACT_ERROR");
+  let payload: unknown;
+  try { payload = await response.clone().json(); }
+  catch { throw new HttpError(500, "Response must be JSON", "RESPONSE_CONTRACT_ERROR"); }
+  const result = await schema["~standard"].validate(payload);
+  if ("issues" in result && result.issues) {
+    throw new HttpError(500, "Invalid response", "RESPONSE_CONTRACT_ERROR");
+  }
+  return response;
 }
 
 async function validate(schema: StandardSchema | undefined, input: unknown, location: string) {
@@ -116,6 +149,7 @@ export type RouteGroup<Env> = {
 export function createApp<Env = unknown>() {
   const routes: Registered<Env>[] = [];
   const globalMiddleware: Middleware<Env>[] = [];
+  let errorHandler: ErrorHandler<Env> | undefined;
 
   // Group registrations are flattened at startup. Requests never traverse a group tree.
   function joinPath(prefix: string, path: string): string {
@@ -166,6 +200,7 @@ export function createApp<Env = unknown>() {
   }
 
   const app = {
+    onError(handler: ErrorHandler<Env>) { errorHandler = handler; return app; },
     use(middleware: Middleware<Env>) {
       globalMiddleware.push(middleware);
       return app;
@@ -234,7 +269,7 @@ export function createApp<Env = unknown>() {
             context.params = await validate(route.schemas.params, params, "params") as Record<string, string>;
             context.query = await validate(route.schemas.query, context.query, "query") as Record<string, string>;
             if (route.schemas.body) context.body = await validate(route.schemas.body, await parseBody(req), "body");
-            return serialize(await route.handler(context));
+            return validateResponse(await route.handler(context), route.schemas.responses);
           };
           // Compose backwards so middleware executes in registration order.
           for (const middleware of [...route.middleware].reverse()) {
@@ -248,6 +283,12 @@ export function createApp<Env = unknown>() {
           status: methodMismatch ? 405 : 404,
         });
       } catch (error) {
+        if (errorHandler) {
+          try {
+            const handled = await errorHandler(error, { req, env });
+            if (handled instanceof Response) return req.method === "HEAD" ? new Response(null, handled) : handled;
+          } catch { /* Never expose errors thrown by error hooks. */ }
+        }
         if (error instanceof HttpError) {
           return Response.json({ error: error.message, code: error.code }, { status: error.status });
         }
