@@ -535,6 +535,37 @@ in one call, executing them in registration order. Spread reusable arrays with
 secure credential verifier in production. Cookie helpers support common attributes;
 validate untrusted domain and path values before passing them to `setCookie()`.
 
+### Static assets, compression, HTML and JSX
+
+All four helpers are Fetch-native. Static assets use an injected loader, so the
+router does not depend on Node's filesystem and can work with Cloudflare assets.
+
+```ts
+import { createApp, serveStatic, compress, html, htmlResponse } from "@rodkisten/roteador";
+
+type Env = { ASSETS: { fetch(request: Request): Promise<Response> } };
+const app = createApp<Env>();
+
+app.use(compress({ encoding: "gzip" }));
+app.get("/assets/*", serveStatic({
+  fetch: (path, { req, env }) =>
+    env.ASSETS.fetch(new Request(new URL(path, req.url))),
+}));
+app.get("/", () => htmlResponse(html`<h1>${"Hello <world>"}</h1>`));
+```
+
+`html` escapes interpolated values by default; use `rawHtml()` only for trusted
+markup. `htmlResponse()` supplies the HTML content type.
+
+For automatic JSX runtime, configure TypeScript with
+`"jsx": "react-jsx"` and `"jsxImportSource": "@rodkisten/roteador"`.
+JSX is server-rendered into escaped HTML fragments and returned via `htmlResponse()`.
+It does not hydrate or attach client-side event handlers.
+
+`compress()` uses Web `CompressionStream`, negotiates gzip/deflate, and skips
+already encoded, partial, or no-transform responses. Static asset content types
+and caching headers should be set by the supplied asset loader.
+
 ## 🗺️ Roadmap
 
 - [x] Fetch-native route registration and dispatch
@@ -545,7 +576,8 @@ validate untrusted domain and path values before passing them to `setCookie()`.
 - [x] Response schemas and typed status contracts
 - [x] Configurable error hooks
 - [x] Basic Authentication, Body Limit, Secure Headers, Logger, Pretty JSON and Cookie helpers
-- [ ] Cache, Compress, Context Storage, ETag, HTML, JSX, JWT, Language, SSG and Streaming
+- [x] Static asset serving, compression, HTML templates and server-rendered JSX
+- [ ] Cache, Context Storage, ETag, JWT, Language, SSG and Streaming
 - [ ] OpenAPI document generation
 - [ ] Type-safe RPC client
 - [ ] More adapters and integration examples
