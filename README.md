@@ -493,6 +493,42 @@ The repository also contains a manually dispatched / scheduled auto-fix workflow
 proposes changes through pull requests instead of pushing formatting changes directly
 to `main`.
 
+
+### HTTP utility middleware (phase one)
+
+The core package now exports a small set of opt-in HTTP utilities:
+
+```ts
+import {
+  createApp, basicAuth, bodyLimit, secureHeaders,
+  logger, prettyJSON, getCookie, setCookie,
+} from "@rodkisten/roteador";
+
+const app = createApp<{ PASSWORD: string }>();
+app.use(bodyLimit(1024 * 1024));
+app.use(secureHeaders());
+app.use(logger());
+app.use(prettyJSON(2));
+app.use(basicAuth({
+  realm: "Admin",
+  verify: async (username, password, env) =>
+    username === "admin" && password === env.PASSWORD,
+}));
+
+app.get("/session", ({ req }) => {
+  const headers = new Headers();
+  setCookie(headers, "session", "example", {
+    httpOnly: true, secure: true, sameSite: "Lax", path: "/",
+  });
+  return Response.json({ previous: getCookie(req, "session") ?? null }, { headers });
+});
+```
+
+`bodyLimit()` checks the actual request body bytes as well as the declared content length.
+`basicAuth()` sends a standard `WWW-Authenticate` challenge. Use HTTPS and a
+secure credential verifier in production. Cookie helpers support common attributes;
+validate untrusted domain and path values before passing them to `setCookie()`.
+
 ## 🗺️ Roadmap
 
 - [x] Fetch-native route registration and dispatch
@@ -502,6 +538,8 @@ to `main`.
 - [x] CORS and Bearer authentication helpers
 - [x] Response schemas and typed status contracts
 - [x] Configurable error hooks
+- [x] Basic Authentication, Body Limit, Secure Headers, Logger, Pretty JSON and Cookie helpers
+- [ ] Cache, Compress, Context Storage, ETag, HTML, JSX, JWT, Language, SSG and Streaming
 - [ ] OpenAPI document generation
 - [ ] Type-safe RPC client
 - [ ] More adapters and integration examples
