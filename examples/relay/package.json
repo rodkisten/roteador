@@ -1,0 +1,16 @@
+{
+  "name": "roteador-relay-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@rodkisten/roteador": "workspace:*",
+    "arktype": "latest"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "latest"
+  }
+}
