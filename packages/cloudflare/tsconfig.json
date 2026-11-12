@@ -1,1 +1,0 @@
-{"extends":"../../tsconfig.base.json","compilerOptions":{"paths":{"@rodkisten/roteador":["../core/src/index.ts"]}},"include":["src/**/*.ts"]}
