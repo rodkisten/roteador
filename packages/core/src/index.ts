@@ -120,7 +120,7 @@ export function createApp<Env = unknown>() {
   // Group registrations are flattened at startup. Requests never traverse a group tree.
   function joinPath(prefix: string, path: string): string {
     if (!path.startsWith("/")) throw new TypeError("Routes must start with /");
-    const base = prefix === "/" ? "" : prefix.replace(/\\/$/, "");
+    const base = prefix === "/" ? "" : prefix.replace(/\/$/, "");
     return base + (path === "/" ? (base ? "" : "/") : path);
   }
 
@@ -262,4 +262,5 @@ export function createApp<Env = unknown>() {
 export function route<Env, S extends Schemas>(definition: RouteDefinition<Env, S>) {
   return definition;
 }
-\nexport { cors, bearerAuth, type CorsOptions } from "./middleware";\n
+
+export { cors, bearerAuth, type CorsOptions } from "./middleware";
