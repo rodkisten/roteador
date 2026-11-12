@@ -10,13 +10,21 @@
     ".": {
       "types": "./dist/index.d.mts",
       "default": "./dist/index.mjs"
+    },
+    "./jsx-runtime": {
+      "types": "./dist/jsx-runtime.d.mts",
+      "default": "./dist/jsx-runtime.mjs"
+    },
+    "./jsx-dev-runtime": {
+      "types": "./dist/jsx-runtime.d.mts",
+      "default": "./dist/jsx-runtime.mjs"
     }
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsdown src/index.ts --format esm --dts",
+    "build": "tsdown src/index.ts src/jsx-runtime.ts --format esm --dts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test:coverage": "vitest run --coverage"
