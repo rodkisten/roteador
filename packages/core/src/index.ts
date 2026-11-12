@@ -21,9 +21,9 @@ type Schemas = { params?: StandardSchema<any, any>; query?: StandardSchema<any, 
 export type Context<Env, S extends Schemas = {}> = {
   req: Request;
   env: Env;
-  params: S["params"] extends StandardSchema<any, any> ? Infer<S["params"]> : Record<string, string>;
-  query: S["query"] extends StandardSchema<any, any> ? Infer<S["query"]> : Record<string, string>;
-  body: S["body"] extends StandardSchema<any, any> ? Infer<S["body"]> : unknown;
+  params: NonNullable<S["params"]> extends StandardSchema<any, any> ? Infer<NonNullable<S["params"]>> : Record<string, string>;
+  query: NonNullable<S["query"]> extends StandardSchema<any, any> ? Infer<NonNullable<S["query"]>> : Record<string, string>;
+  body: NonNullable<S["body"]> extends StandardSchema<any, any> ? Infer<NonNullable<S["body"]>> : unknown;
   state: Record<string, unknown>;
   waitUntil(promise: Promise<unknown>): void;
 };
