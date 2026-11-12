@@ -4,6 +4,43 @@ import { basicAuth, bodyLimit, createApp, getCookie, logger, prettyJSON, secureH
 const req = (path = "/", init?: RequestInit) => new Request("https://example.test" + path, init);
 
 describe("HTTP utilities", () => {
+  it("supports multiple middleware in one use call, preserving onion order", async () => {
+    const app = createApp();
+    const calls: string[] = [];
+    const outer = async (_ctx: unknown, next: () => Promise<Response>) => {
+      calls.push("outer-before");
+      const response = await next();
+      calls.push("outer-after");
+      return response;
+    };
+    const inner = async (_ctx: unknown, next: () => Promise<Response>) => {
+      calls.push("inner-before");
+      const response = await next();
+      calls.push("inner-after");
+      return response;
+    };
+    app.use(outer, inner);
+    app.get("/", () => { calls.push("handler"); return "ok"; });
+    expect((await app.fetch(req(), undefined)).status).toBe(200);
+    expect(calls).toEqual(["outer-before", "inner-before", "handler", "inner-after", "outer-after"]);
+  });
+
+  it("supports spread middleware presets and multiple group middleware", async () => {
+    const app = createApp();
+    const preset = [secureHeaders(), prettyJSON()] as const;
+    app.use(...preset);
+    app.group("/admin", (group) => {
+      group.use(
+        async ({ state }, next) => { state.first = true; return next(); },
+        async ({ state }, next) => { state.second = true; return next(); },
+      );
+      group.get("/", ({ state }) => ({ ...state }));
+    });
+    const response = await app.fetch(req("/admin"), undefined);
+    expect(await response.json()).toEqual({ first: true, second: true });
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+  });
+
   it("accepts valid Basic credentials and rejects malformed or incorrect credentials", async () => {
     const app = createApp();
     app.use(basicAuth({ realm: "Private", verify: async (user, pass) => user === "rod" && pass === "secret" }));
