@@ -99,36 +99,107 @@ async function parseBody(req: Request) {
   catch { throw new HttpError(400, "Invalid JSON body", "INVALID_JSON"); }
 }
 
+/** A scoped route registrar. Middleware affects only routes registered after it. */
+export type RouteGroup<Env> = {
+  use(middleware: Middleware<Env>): RouteGroup<Env>;
+  route<const S extends Schemas>(definition: S & {
+    method: string; path: string; handler: Handler<Env, NoInfer<S>>;
+  }): RouteGroup<Env>;
+  get(path: string, handler: Handler<Env>): RouteGroup<Env>;
+  post(path: string, handler: Handler<Env>): RouteGroup<Env>;
+  put(path: string, handler: Handler<Env>): RouteGroup<Env>;
+  patch(path: string, handler: Handler<Env>): RouteGroup<Env>;
+  delete(path: string, handler: Handler<Env>): RouteGroup<Env>;
+  group(prefix: string, configure: (group: RouteGroup<Env>) => void): RouteGroup<Env>;
+};
+
 export function createApp<Env = unknown>() {
   const routes: Registered<Env>[] = [];
   const globalMiddleware: Middleware<Env>[] = [];
+
+  // Group registrations are flattened at startup. Requests never traverse a group tree.
+  function joinPath(prefix: string, path: string): string {
+    if (!path.startsWith("/")) throw new TypeError("Routes must start with /");
+    const base = prefix === "/" ? "" : prefix.replace(/\\/$/, "");
+    return base + (path === "/" ? (base ? "" : "/") : path);
+  }
+
+  function register<S extends Schemas>(
+    definition: S & { method: string; path: string; handler: Handler<Env, NoInfer<S>> },
+    prefix: string,
+    middleware: Middleware<Env>[],
+  ) {
+    const path = joinPath(prefix, definition.path);
+    const method = definition.method.toUpperCase();
+    const { matcher, keys } = compile(path);
+    if (routes.some((r) => r.method === method && r.path === path)) {
+      throw new TypeError("Duplicate route: " + method + " " + path);
+    }
+    routes.push({
+      method, path, matcher, keys, schemas: definition,
+      handler: definition.handler, middleware: [...middleware],
+    });
+  }
+
+  function group(prefix: string, configure: (group: RouteGroup<Env>) => void): void {
+    createGroup(prefix, [...globalMiddleware], configure);
+  }
+
+  function createGroup(
+    prefix: string,
+    inherited: Middleware<Env>[],
+    configure: (group: RouteGroup<Env>) => void,
+  ): void {
+    if (!prefix.startsWith("/")) throw new TypeError("Group prefix must start with /");
+    const middleware = [...inherited];
+    const api: RouteGroup<Env> = {
+      use(fn) { middleware.push(fn); return api; },
+      route(definition) { register(definition, prefix, middleware); return api; },
+      get(path, handler) { register({ method: "GET", path, handler }, prefix, middleware); return api; },
+      post(path, handler) { register({ method: "POST", path, handler }, prefix, middleware); return api; },
+      put(path, handler) { register({ method: "PUT", path, handler }, prefix, middleware); return api; },
+      patch(path, handler) { register({ method: "PATCH", path, handler }, prefix, middleware); return api; },
+      delete(path, handler) { register({ method: "DELETE", path, handler }, prefix, middleware); return api; },
+      group(path, callback) { createGroup(joinPath(prefix, path), middleware, callback); return api; },
+    };
+    configure(api);
+  }
 
   const app = {
     use(middleware: Middleware<Env>) {
       globalMiddleware.push(middleware);
       return app;
     },
-    route<const S extends Schemas>(definition: S & { method: string; path: string; handler: Handler<Env, NoInfer<S>> }) {
-      const { matcher, keys } = compile(definition.path);
-      if (routes.some((r) => r.method === definition.method.toUpperCase() && r.path === definition.path)) {
-        throw new TypeError("Duplicate route: " + definition.method + " " + definition.path);
-      }
-      routes.push({
-        method: definition.method.toUpperCase(),
-        path: definition.path,
-        matcher,
-        keys,
-        schemas: definition,
-        handler: definition.handler,
-        middleware: [...globalMiddleware],
-      });
+    route<const S extends Schemas>(definition: S & {
+      method: string; path: string; handler: Handler<Env, NoInfer<S>>;
+    }) {
+      register(definition, "", globalMiddleware);
       return app;
     },
-    get(path: string, handler: Handler<Env>) { return app.route({ method: "GET", path, handler }); },
-    post(path: string, handler: Handler<Env>) { return app.route({ method: "POST", path, handler }); },
-    put(path: string, handler: Handler<Env>) { return app.route({ method: "PUT", path, handler }); },
-    patch(path: string, handler: Handler<Env>) { return app.route({ method: "PATCH", path, handler }); },
-    delete(path: string, handler: Handler<Env>) { return app.route({ method: "DELETE", path, handler }); },
+    get(path: string, handler: Handler<Env>) {
+      register({ method: "GET", path, handler }, "", globalMiddleware);
+      return app;
+    },
+    post(path: string, handler: Handler<Env>) {
+      register({ method: "POST", path, handler }, "", globalMiddleware);
+      return app;
+    },
+    put(path: string, handler: Handler<Env>) {
+      register({ method: "PUT", path, handler }, "", globalMiddleware);
+      return app;
+    },
+    patch(path: string, handler: Handler<Env>) {
+      register({ method: "PATCH", path, handler }, "", globalMiddleware);
+      return app;
+    },
+    delete(path: string, handler: Handler<Env>) {
+      register({ method: "DELETE", path, handler }, "", globalMiddleware);
+      return app;
+    },
+    group(prefix: string, configure: (group: RouteGroup<Env>) => void) {
+      group(prefix, configure);
+      return app;
+    },
     async fetch(req: Request, env: Env, execution?: { waitUntil(promise: Promise<unknown>): void }): Promise<Response> {
       try {
         const url = new URL(req.url);
