@@ -8,9 +8,9 @@ jobs:
       - run: corepack enable
       - run: corepack prepare pnpm@12.18.0 --activate
       - run: pnpm install --no-frozen-lockfile
-      - run: pnpm typecheck
-      - run: pnpm test
       - run: pnpm build
+      - run: pnpm -r typecheck
+      - run: pnpm -r test
 workflows:
   ci:
     jobs:
