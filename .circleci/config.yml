@@ -11,7 +11,45 @@ jobs:
       - run: pnpm build
       - run: pnpm -r typecheck
       - run: pnpm -r test
+  publish_fallback:
+    docker:
+      - image: cimg/node:24.11
+    steps:
+      - checkout
+      - run: corepack enable
+      - run: corepack prepare pnpm@12.18.0 --activate
+      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm build
+      - run: pnpm -r typecheck
+      - run: pnpm -r test
+      - run:
+          name: Publish to npm using restricted token
+          command: |
+            set -eu
+            test -n "${NPM_TOKEN:-}" || { echo "NPM_TOKEN is required"; exit 1; }
+            version="$(node -p 'require("./packages/core/package.json").version')"
+            if npm view "@rodkisten/roteador@$version" version >/dev/null 2>&1; then
+              echo "Version already published; refusing to overwrite."
+              exit 1
+            fi
+            cd packages/core
+            npm config set //registry.npmjs.org/:_authToken "$NPM_TOKEN" --location=project
+            trap 'rm -f .npmrc' EXIT
+            npm publish --access public --tag next
 workflows:
   ci:
     jobs:
       - check
+      - hold_for_fallback:
+          type: approval
+          filters:
+            branches:
+              only: main
+      - publish_fallback:
+          context: roteador-npm-publish
+          requires:
+            - check
+            - hold_for_fallback
+          filters:
+            branches:
+              only: main
