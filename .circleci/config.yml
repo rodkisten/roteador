@@ -1,0 +1,17 @@
+version: 2.1
+jobs:
+  check:
+    docker:
+      - image: cimg/node:22.16
+    steps:
+      - checkout
+      - run: corepack enable
+      - run: corepack prepare pnpm@10.20.0 --activate
+      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+workflows:
+  ci:
+    jobs:
+      - check
