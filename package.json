@@ -9,7 +9,7 @@
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r test",
-    "typecheck": "pnpm -r typecheck",
+    "typecheck": "pnpm build && pnpm -r typecheck",
     "lint": "prettier --check .",
     "format": "prettier --write .",
     "outdated": "pnpm outdated -r"
