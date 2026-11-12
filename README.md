@@ -505,15 +505,17 @@ import {
 } from "@rodkisten/roteador";
 
 const app = createApp<{ PASSWORD: string }>();
-app.use(bodyLimit(1024 * 1024));
-app.use(secureHeaders());
-app.use(logger());
-app.use(prettyJSON(2));
-app.use(basicAuth({
-  realm: "Admin",
-  verify: async (username, password, env) =>
-    username === "admin" && password === env.PASSWORD,
-}));
+app.use(
+  bodyLimit(1024 * 1024),
+  secureHeaders(),
+  logger(),
+  prettyJSON(2),
+  basicAuth({
+    realm: "Admin",
+    verify: async (username, password, env) =>
+      username === "admin" && password === env.PASSWORD,
+  }),
+);
 
 app.get("/session", ({ req }) => {
   const headers = new Headers();
@@ -523,6 +525,10 @@ app.get("/session", ({ req }) => {
   return Response.json({ previous: getCookie(req, "session") ?? null }, { headers });
 });
 ```
+
+Both `app.use(...middleware)` and `group.use(...middleware)` accept multiple middleware
+in one call, executing them in registration order. Spread reusable arrays with
+`app.use(...preset)`. Existing single-middleware calls remain supported.
 
 `bodyLimit()` checks the actual request body bytes as well as the declared content length.
 `basicAuth()` sends a standard `WWW-Authenticate` challenge. Use HTTPS and a
