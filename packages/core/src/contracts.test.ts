@@ -32,12 +32,12 @@ describe("response contracts", () => {
     app.route({
       method: "GET", path: "/invalid",
       responses: { 200: schema(() => false) },
-      handler: () => ({ secret: "private" }),
+      handler: () => Response.json({ secret: "private" }),
     });
     app.route({
       method: "GET", path: "/undeclared",
       responses: { 201: schema(() => true) },
-      handler: () => ({ secret: "private" }),
+      handler: () => Response.json({ secret: "private" }),
     });
     for (const path of ["/invalid", "/undeclared"]) {
       const response = await app.fetch(request(path), undefined);
