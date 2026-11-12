@@ -1,0 +1,29 @@
+name: Promote npm release
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Already published version (e.g. 0.0.1)
+        required: true
+        type: string
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  promote:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: npm-publish
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Validate version and promote existing artifact
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          node -e 'if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(process.env.VERSION)) process.exit(1)'
+          npm view "@rodkisten/roteador@$VERSION" version --registry=https://registry.npmjs.org
+          npm dist-tag add "@rodkisten/roteador@$VERSION" latest
