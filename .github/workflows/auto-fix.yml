@@ -1,0 +1,63 @@
+name: Auto-fix formatting and lint
+run-name: Auto-fix Prettier + ESLint (${{ github.event_name }})
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * 1"
+permissions:
+  contents: write
+  pull-requests: write
+concurrency:
+  group: roteador-auto-fix
+  cancel-in-progress: false
+jobs:
+  auto-fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout default branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: true
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.18.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+      - name: Run safe automatic fixes
+        run: |
+          pnpm exec prettier --write .
+          pnpm exec eslint . --fix
+          pnpm exec prettier --write .
+      - name: Create pull request when files changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Only include tracked source/config files; ignore lockfile churn
+          # until the monorepo commits a canonical lockfile.
+          git add -u
+          if git diff --cached --quiet; then
+            echo "No tracked formatting/lint changes to propose."
+            exit 0
+          fi
+
+          branch="chore/auto-fix-${RUN_ID}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git commit -m "style: apply Prettier and ESLint automatic fixes"
+          git push --set-upstream origin "$branch"
+
+          # GitHub may restrict workflow-created PRs depending on repository
+          # Actions settings. Fail visibly instead of silently discarding fixes.
+          gh pr create \
+            --base main \
+            --head "$branch" \
+            --title "style: automatic Prettier and ESLint fixes" \
+            --body "Automated formatting and safe ESLint fixes. Review changes before merging. This workflow does not publish packages or block deployments."
