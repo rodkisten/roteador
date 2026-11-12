@@ -13,7 +13,6 @@ on:
           - latest
 permissions:
   contents: write
-  id-token: write
 concurrency:
   group: npm-release-roteador
   cancel-in-progress: false
@@ -53,12 +52,17 @@ jobs:
             echo "::error::Version already exists on npm. Bump the package version before publishing."
             exit 1
           fi
-      - name: Publish package with npm trusted publishing
+      - name: Publish package using npm bootstrap token
         working-directory: packages/core
         env:
-          NPM_CONFIG_PROVENANCE: "true"
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           RELEASE_TAG: ${{ inputs.npm_tag }}
-        run: npm publish --access public --provenance --tag "$RELEASE_TAG"
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::error::NPM_TOKEN is missing. Configure it as an Actions secret."
+            exit 1
+          fi
+          npm publish --access public --tag "$RELEASE_TAG"
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
