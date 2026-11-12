@@ -47,7 +47,12 @@ export function bodyLimit<Env>(maxBytes: number): Middleware<Env> {
           size += value.byteLength;
           if (size > maxBytes) throw new HttpError(413, "Payload Too Large", "BODY_TOO_LARGE");
         }
-      } finally { await reader.cancel().catch(() => undefined); }
+      } finally {
+        // A cloned Request tees its stream. Waiting for cancellation can deadlock
+        // while the original branch remains unread; release without awaiting it.
+        void reader.cancel().catch(() => undefined);
+        reader.releaseLock();
+      }
     }
     return next();
   };
