@@ -1,0 +1,73 @@
+name: Publish npm
+run-name: Publish @rodkisten/roteador (${{ inputs.npm_tag }})
+on:
+  workflow_dispatch:
+    inputs:
+      npm_tag:
+        description: npm dist-tag for this release
+        type: choice
+        required: true
+        default: next
+        options:
+          - next
+          - latest
+permissions:
+  contents: write
+  id-token: write
+concurrency:
+  group: npm-release-roteador
+  cancel-in-progress: false
+jobs:
+  publish:
+    # Never publish from a PR or a feature branch.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: npm-publish
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.18.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build and verify
+        run: |
+          pnpm build
+          pnpm -r typecheck
+          pnpm -r test
+      - name: Read package metadata
+        id: package
+        shell: bash
+        run: |
+          node -e 'const p=require("./packages/core/package.json"); const fs=require("fs"); fs.appendFileSync(process.env.GITHUB_OUTPUT, "name="+p.name+"\nversion="+p.version+"\n");'
+      - name: Ensure version is not already published
+        env:
+          PACKAGE_NAME: ${{ steps.package.outputs.name }}
+          PACKAGE_VERSION: ${{ steps.package.outputs.version }}
+        run: |
+          if npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version --registry=https://registry.npmjs.org >/dev/null 2>&1; then
+            echo "::error::Version already exists on npm. Bump the package version before publishing."
+            exit 1
+          fi
+      - name: Publish package with npm trusted publishing
+        working-directory: packages/core
+        env:
+          NPM_CONFIG_PROVENANCE: "true"
+          RELEASE_TAG: ${{ inputs.npm_tag }}
+        run: npm publish --access public --provenance --tag "$RELEASE_TAG"
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE_VERSION: ${{ steps.package.outputs.version }}
+          RELEASE_TAG: ${{ inputs.npm_tag }}
+        run: |
+          tag="v${PACKAGE_VERSION}"
+          if [ "$RELEASE_TAG" = "next" ]; then
+            gh release create "$tag" --target "$GITHUB_SHA" --title "$tag" --generate-notes --prerelease
+          else
+            gh release create "$tag" --target "$GITHUB_SHA" --title "$tag" --generate-notes
+          fi
