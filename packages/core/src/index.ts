@@ -136,7 +136,10 @@ export function createApp<Env = unknown>() {
         for (const route of routes) {
           const match = route.matcher.exec(url.pathname);
           if (!match) continue;
-          if (route.method !== req.method && !(req.method === "HEAD" && route.method === "GET")) {
+          const preflight = req.method === "OPTIONS" && req.headers.has("access-control-request-method");
+          const requestedMethod = req.headers.get("access-control-request-method")?.toUpperCase();
+          if (route.method !== req.method && !(req.method === "HEAD" && route.method === "GET") &&
+              !(preflight && route.method === requestedMethod)) {
             methodMismatch = true;
             continue;
           }
@@ -156,6 +159,7 @@ export function createApp<Env = unknown>() {
             },
           };
           let next = async () => {
+            if (preflight) return new Response(null, { status: 204 });
             context.params = await validate(route.schemas.params, params, "params") as Record<string, string>;
             context.query = await validate(route.schemas.query, context.query, "query") as Record<string, string>;
             if (route.schemas.body) context.body = await validate(route.schemas.body, await parseBody(req), "body");
@@ -187,3 +191,4 @@ export function createApp<Env = unknown>() {
 export function route<Env, S extends Schemas>(definition: RouteDefinition<Env, S>) {
   return definition;
 }
+\nexport { cors, bearerAuth, type CorsOptions } from "./middleware";\n
