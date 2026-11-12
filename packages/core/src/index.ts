@@ -262,4 +262,4 @@ export function createApp<Env = unknown>() {
 export function route<Env, S extends Schemas>(definition: RouteDefinition<Env, S>) {
   return definition;
 }
-\nexport { cors, bearerAuth, type CorsOptions } from "./middleware";\n
+export { cors, bearerAuth, type CorsOptions } from "./middleware";\n
