@@ -1,16 +1,16 @@
 name: Publish npm
-run-name: Publish @rodkisten/roteador (${{ inputs.npm_tag }})
+run-name: Release @rodkisten/roteador (${{ github.event_name == 'workflow_dispatch' && inputs.npm_tag || 'latest' }})
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       npm_tag:
-        description: npm dist-tag for this release
+        description: npm dist-tag
         type: choice
         required: true
-        default: next
-        options:
-          - next
-          - latest
+        default: latest
+        options: [latest, next]
 permissions:
   contents: write
   id-token: write
@@ -19,12 +19,14 @@ concurrency:
   cancel-in-progress: false
 jobs:
   publish:
-    # Never publish from a PR or a feature branch.
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message, 'chore(release):')
     runs-on: ubuntu-latest
     environment: npm-publish
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
       - uses: pnpm/action-setup@v4
         with:
           version: 12.18.0
@@ -39,36 +41,74 @@ jobs:
           pnpm build
           pnpm -r typecheck
           pnpm -r test
-      - name: Read package metadata
+          pnpm lint
+      - name: Create automatic patch changeset if none exists
+        shell: bash
+        run: |
+          if ! find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' | grep -q .; then
+            cat > .changeset/automatic-release.md <<'CHANGESET'
+          ---
+          "@rodkisten/roteador": patch
+          ---
+
+          Automated release for changes merged into main.
+          CHANGESET
+          fi
+      - name: Apply Changesets versioning
+        run: pnpm exec changeset version
+      - name: Resolve release metadata
         id: package
         shell: bash
         run: |
-          node -e 'const p=require("./packages/core/package.json"); const fs=require("fs"); fs.appendFileSync(process.env.GITHUB_OUTPUT, "name="+p.name+"\nversion="+p.version+"\n");'
-      - name: Ensure version is not already published
+          node -e 'const p=require("./packages/core/package.json");const fs=require("fs");fs.appendFileSync(process.env.GITHUB_OUTPUT,"name="+p.name+"\nversion="+p.version+"\n");'
+      - name: Check npm publication
+        id: npm
+        shell: bash
         env:
           PACKAGE_NAME: ${{ steps.package.outputs.name }}
           PACKAGE_VERSION: ${{ steps.package.outputs.version }}
         run: |
           if npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version --registry=https://registry.npmjs.org >/dev/null 2>&1; then
-            echo "::error::Version already exists on npm. Bump the package version before publishing."
-            exit 1
+            echo "already_published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "already_published=false" >> "$GITHUB_OUTPUT"
           fi
-      # npm exchanges GitHub's short-lived OIDC identity for publish authorization.
-      # No NPM_TOKEN or stored credentials are needed.
-      - name: Publish with npm Trusted Publishing
+      - name: Build versioned package
+        if: steps.npm.outputs.already_published == 'false'
+        run: pnpm build
+      - name: Publish via npm Trusted Publishing
+        if: steps.npm.outputs.already_published == 'false'
         working-directory: packages/core
         env:
-          RELEASE_TAG: ${{ inputs.npm_tag }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.npm_tag || 'latest' }}
         run: npm publish --access public --provenance --tag "$RELEASE_TAG"
-      - name: Create GitHub release
+      - name: Commit versions and create tag
+        shell: bash
+        env:
+          PACKAGE_VERSION: ${{ steps.package.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A .changeset packages/core/package.json packages/cloudflare/package.json pnpm-lock.yaml CHANGELOG.md packages/core/CHANGELOG.md packages/cloudflare/CHANGELOG.md
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(release): v${PACKAGE_VERSION}"
+          fi
+          tag="v${PACKAGE_VERSION}"
+          if ! git rev-parse "$tag" >/dev/null 2>&1; then
+            git tag "$tag"
+          fi
+          git push origin HEAD:main
+          git push origin "$tag"
+      - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           PACKAGE_VERSION: ${{ steps.package.outputs.version }}
-          RELEASE_TAG: ${{ inputs.npm_tag }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.npm_tag || 'latest' }}
         run: |
           tag="v${PACKAGE_VERSION}"
+          if gh release view "$tag" >/dev/null 2>&1; then exit 0; fi
           if [ "$RELEASE_TAG" = "next" ]; then
-            gh release create "$tag" --target "$GITHUB_SHA" --title "$tag" --generate-notes --prerelease
+            gh release create "$tag" --target "$tag" --title "$tag" --generate-notes --prerelease
           else
-            gh release create "$tag" --target "$GITHUB_SHA" --title "$tag" --generate-notes
+            gh release create "$tag" --target "$tag" --title "$tag" --generate-notes
           fi
