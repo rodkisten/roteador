@@ -37,6 +37,8 @@
   - [Cloudflare Workers and queues](#cloudflare-workers-and-queues)
   - [Background work with waitUntil](#background-work-with-waituntil)
   - [Custom responses and streaming](#custom-responses-and-streaming)
+  - [Response contracts](#response-contracts)
+  - [Configurable error hooks](#configurable-error-hooks)
   - [Errors and status codes](#errors-and-status-codes)
   - [Testing routes](#testing-routes)
 - [API reference](#-api-reference)
@@ -75,8 +77,9 @@ server dependency, and no requirement to choose a particular schema library.
 | Structured HTTP errors | ✅ Implemented |
 | Nested route groups and scoped middleware | ✅ Implemented in repository |
 | CORS and Bearer middleware | ✅ Implemented in repository |
+| Configurable error hooks | ✅ Implemented in repository |
 | OpenAPI generation | 🗺️ Planned |
-| Typed response contracts | 🗺️ Planned |
+| Typed response contracts | ✅ Implemented in repository |
 | RPC client generation | 🗺️ Planned |
 | Built-in rate limiting | 🗺️ Planned |
 
@@ -322,6 +325,63 @@ app.get("/stream", () => {
 
 Return a native `Response` for full control of status, headers, cookies and streaming.
 
+### Response contracts
+
+Declare status-specific Standard Schema validators to verify JSON responses before they leave the router.
+Use `respond(status, body, headers?)` to create a status-specific JSON response.
+
+```ts
+import { createApp, respond } from "@rodkisten/roteador";
+import { type } from "arktype";
+
+const app = createApp();
+
+app.route({
+  method: "POST",
+  path: "/items",
+  responses: {
+    201: type({ id: "string" }),
+    400: type({ error: "string" }),
+  },
+  handler: () => respond(201, { id: "item-1" }),
+});
+```
+
+When `responses` is declared, only listed HTTP statuses are accepted. Each response must
+have a JSON body matching its schema. Invalid output returns HTTP 500 with
+`RESPONSE_CONTRACT_ERROR`; this prevents invalid response payloads from being exposed.
+Schema output types determine the allowed `respond()` status/body combinations in
+declarative handlers. Without `responses`, existing serialization behavior is unchanged.
+This feature is not a streaming response validator.
+
+### Configurable error hooks
+
+Use `app.onError()` to customize error responses or integrate application-level logging.
+Return `undefined` to preserve the default error behavior.
+
+```ts
+import { createApp, HttpError } from "@rodkisten/roteador";
+
+const app = createApp<{ APP_NAME: string }>();
+
+app.onError((error, { req, env }) => {
+  if (error instanceof HttpError) {
+    return Response.json({
+      error: error.message,
+      code: error.code,
+      app: env.APP_NAME,
+    }, { status: error.status });
+  }
+
+  // Do not include internal exception messages in client responses.
+  console.error("Request failed:", new URL(req.url).pathname);
+  return undefined;
+});
+```
+
+If an error hook throws, Roteador falls back to its sanitized default error response.
+Hooks receive the original error, request and environment.
+
 ### Errors and status codes
 
 ```ts
@@ -366,6 +426,9 @@ it("responds to health checks", async () => {
 | `app.use(middleware)` | Register middleware for subsequent routes |
 | `app.group(prefix, callback)` | Register prefixed and nested route groups |
 | `app.fetch(request, env, execution?)` | Dispatch a request and return a Promise<Response> |
+| `respond(status, body, headers?)` | Construct a typed JSON response with an explicit HTTP status |
+| `app.onError(handler)` | Customize error responses, with a safe fallback |
+| `responses: { [status]: schema }` | Validate declared JSON response contracts |
 | `cors(options?)` | Apply CORS headers and handle preflight |
 | `bearerAuth(verify)` | Require an application-verified Bearer token |
 | `new HttpError(status, message, code?)` | Return a controlled HTTP error |
@@ -386,7 +449,7 @@ Handler context:
 
 - **v0 API:** signatures may change before a stable release.
 - **JSON only:** built-in body parsing currently requires a declared schema and JSON content type.
-- **No automatic output validation:** return values are serialized but not schema-checked.
+- **Opt-in output validation:** declare `responses` to validate JSON output; streaming is not validated.
 - **No built-in rate limiter:** configure limits at the edge or add your own middleware.
 - **No OpenAPI/RPC generation yet:** these are roadmap items, not shipping APIs.
 - **Middleware scope:** registrations affect only routes added after them.
@@ -437,8 +500,8 @@ to `main`.
 - [x] Middleware, typed bindings and `waitUntil`
 - [x] Nested route groups
 - [x] CORS and Bearer authentication helpers
-- [ ] Response schemas and typed status contracts
-- [ ] Configurable error hooks
+- [x] Response schemas and typed status contracts
+- [x] Configurable error hooks
 - [ ] OpenAPI document generation
 - [ ] Type-safe RPC client
 - [ ] More adapters and integration examples
