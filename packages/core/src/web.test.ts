@@ -19,7 +19,7 @@ describe("serveStatic", () => {
     const app = createApp();
     app.get("/assets/*", serveStatic({ fetch: () => undefined }));
     expect((await app.fetch(req("/assets/missing"), undefined)).status).toBe(404);
-    expect((await app.fetch(req("/assets/%2e%2e/secret"), undefined)).status).toBe(403);
+    expect((await app.fetch(req("/assets/%2e%2e%2fsecret"), undefined)).status).toBe(403);
   });
 });
 
@@ -57,7 +57,7 @@ describe("html and jsx", () => {
       children: [
         jsx("input", { disabled: true, value: '"bad"' }),
         jsx("p", { children: "<script>" }),
-        jsx(({ title }: { title: unknown }) => jsx("h1", { children: title }), { title: "Hi" }),
+        jsx(({ title }) => jsx("h1", { children: title }), { title: "Hi" }),
         jsx(Fragment, { children: ["A", "B"] }),
       ],
     });
