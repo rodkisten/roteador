@@ -22,6 +22,8 @@ jobs:
     if: github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message, 'chore(release):')
     runs-on: ubuntu-latest
     environment: npm-publish
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -60,6 +62,7 @@ jobs:
         id: package
         shell: bash
         env:
+          GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           node -e 'const p=require("./packages/core/package.json");const fs=require("fs");fs.appendFileSync(process.env.GITHUB_OUTPUT,"name="+p.name+"\nversion="+p.version+"\n");'
@@ -82,11 +85,13 @@ jobs:
         if: steps.npm.outputs.already_published == 'false'
         working-directory: packages/core
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.npm_tag || 'latest' }}
         run: npm publish --access public --provenance --tag "$RELEASE_TAG"
       - name: Commit versions and create tag
         shell: bash
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           PACKAGE_VERSION: ${{ steps.package.outputs.version }}
         run: |
           git config user.name "github-actions[bot]"
