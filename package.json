@@ -2,7 +2,7 @@
   "name": "roteador-monorepo",
   "repository": {
    "type": "git",
-   "url": "git+https://github.com/rodkisten/roteador"
+   "url": "https://github.com/rodkisten/roteador"
    },
   "private": false,
   "type": "module",
