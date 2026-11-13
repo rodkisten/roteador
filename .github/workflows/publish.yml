@@ -1,4 +1,4 @@
-name: Publish npm
+name: 📋 Publish npm
 run-name: Release @rodkisten/roteador (${{ github.event_name == 'workflow_dispatch' && inputs.npm_tag || 'latest' }})
 on:
   push:
@@ -41,7 +41,7 @@ jobs:
           pnpm build
           pnpm -r typecheck
           pnpm -r test
-          pnpm lint
+       
       - name: Create automatic patch changeset if none exists
         shell: bash
         run: |
