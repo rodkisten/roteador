@@ -2,8 +2,8 @@
   "name": "roteador",
   "repository": {
    "type": "git",
-   "url": "git+https://github.com/rodkisten/roteador.git"
-   "directory": "packages/core",
+   "url": "git+https://github.com/rodkisten/roteador.git",
+   "directory": "packages/core"
   },
   "private": false,
   "type": "module",
