@@ -2,10 +2,12 @@
   "name": "roteador",
   "repository": {
    "type": "git",
-   "url": "git+https://github.com/rodkisten/roteador.git",
-   "directory": "packages/core"
+   "url": "git+https://github.com/rodkisten/roteador.git"
   },
-  "private": false,
+ "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
   "type": "module",
   "packageManager": "pnpm@12.18.0",
   "engines": {
