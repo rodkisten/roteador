@@ -3,6 +3,10 @@
   "version": "0.0.1",
   "type": "module",
   "license": "MIT",
+  "repository": {
+   "type": "git",
+   "url": "git+https://github.com/rodkisten/roteador.git"
+  },
   "publishConfig": {
     "access": "public"
   },
